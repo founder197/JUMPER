@@ -14,6 +14,13 @@
       cursor: not-allowed;
       opacity: 0.6;
     }
+    /* Estilo para setas em select */
+    .select-arrow {
+      background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='white'%3e%3cpath fill-rule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z' clip-rule='evenodd'/%3e%3c/svg%3e");
+      background-repeat: no-repeat;
+      background-position: right 0.75rem center;
+      background-size: 1.5em 1.5em;
+    }
   </style>
 </head>
 <body class="bg-slate-900 text-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
@@ -37,20 +44,26 @@
       
       <div class="input-group">
         <label for="fromChain" class="text-gray-300 text-sm font-medium block mb-1">De Chain</label>
-        <select id="fromChain" class="w-full p-3 rounded-xl bg-slate-700 border border-slate-600 focus:ring-blue-500 focus:border-blue-500 appearance-none">
-            <option value="137" selected>Polygon (137)</option>
-            <option value="1">Ethereum (1)</option>
+        <select id="fromChain" class="w-full p-3 rounded-xl bg-slate-700 border border-slate-600 focus:ring-blue-500 focus:border-blue-500 appearance-none select-arrow">
+            <option value="" disabled selected>Carregando redes...</option>
         </select>
-        <span class="text-xs text-gray-500 mt-1 block">Tokens: USDC (0x2791Bca1...)</span>
+        <span id="fromChainToken" class="text-xs text-gray-500 mt-1 block">Token fixo: USDC</span>
+      </div>
+
+      <div class="flex justify-center">
+        <button id="swapChains" class="p-2 rounded-full bg-slate-700 hover:bg-slate-600 transition disabled:opacity-50" aria-label="Trocar redes de origem e destino">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 2a.75.75 0 01.75.75v10.5l3.22-3.22a.75.75 0 111.06 1.06l-4.5 4.5a.75.75 0 01-1.06 0l-4.5-4.5a.75.75 0 111.06-1.06l3.22 3.22V2.75A.75.75 0 0110 2z" clip-rule="evenodd" />
+          </svg>
+        </button>
       </div>
 
       <div class="input-group">
         <label for="toChain" class="text-gray-300 text-sm font-medium block mb-1">Para Chain</label>
-        <select id="toChain" class="w-full p-3 rounded-xl bg-slate-700 border border-slate-600 focus:ring-blue-500 focus:border-blue-500 appearance-none">
-            <option value="42161" selected>Arbitrum (42161)</option>
-            <option value="10">Optimism (10)</option>
+        <select id="toChain" class="w-full p-3 rounded-xl bg-slate-700 border border-slate-600 focus:ring-blue-500 focus:border-blue-500 appearance-none select-arrow">
+            <option value="" disabled selected>Carregando redes...</option>
         </select>
-        <span class="text-xs text-gray-500 mt-1 block">Tokens: USDC (0xaf88d065...)</span>
+        <span id="toChainToken" class="text-xs text-gray-500 mt-1 block">Token fixo: USDC</span>
       </div>
 
       <div class="input-group">
@@ -60,7 +73,7 @@
     </div>
 
     <div class="flex justify-between mt-6">
-      <button id="getQuote" class="flex-1 mr-2 px-4 py-3 rounded-xl font-bold bg-indigo-500 hover:bg-indigo-600 transition disabled:opacity-60 disabled:cursor-not-allowed">
+      <button id="getQuote" class="flex-1 mr-2 px-4 py-3 rounded-xl font-bold bg-indigo-500 hover:bg-indigo-600 transition disabled:opacity-60 disabled:cursor-not-allowed" disabled>
         Obter Cotação
       </button>
       <button id="executeBridge" class="flex-1 ml-2 px-4 py-3 rounded-xl font-bold bg-green-500 hover:bg-green-600 transition disabled:opacity-60 disabled:cursor-not-allowed" disabled>
@@ -74,18 +87,30 @@
     </div>
 
     <div class="mt-6 text-center text-gray-500 text-xs">
-      Powered by <a href="https://li.fi" target="_blank" class="text-blue-400 hover:text-blue-300 transition">LI.FI</a>
+      Powered by <a href="https://li.fi" target="_blank" class="text-blue-400 hover:text-blue-300 transition">LI.FI / Jumper</a>
     </div>
   </div>
 
   <script>
-    // Constantes e Mapeamento de Tokens (Simplificado para o seu caso)
-    const CHAINS = {
-        '137': { name: 'Polygon', tokenAddress: '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174', decimals: 6 }, // USDC Polygon
-        '42161': { name: 'Arbitrum', tokenAddress: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', decimals: 6 }, // USDC Arbitrum
-        // Adicionar mais chains/tokens se expandir o app
+    // --- Mapeamento de Tokens Padrão (Fixamos no USDC para este exemplo) ---
+    // Em um app de produção, você precisaria buscar o tokenAddress correto para CADA rede.
+    // Para simplificar e manter o código funcional, usaremos o USDC (6 decimais) de cada rede como exemplo.
+    const COMMON_USDC_ADDRESSES = {
+        '1': '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // ETH
+        '10': '0x7F5c764cBc14f9669B88837ca1490cCa17c31607', // Optimism
+        '56': '0x8AC76a51cc950d9822D68b83Ff17aA929237bA75', // BSC (Atenção: Endereço do BUSD/USDT/USDC pode variar, usei um comum)
+        '137': '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174', // Polygon
+        '250': '0x04068DA6C83AFCfa0E13ba15A6696662335D5B73', // Fantom
+        '42161': '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', // Arbitrum
+        '43114': '0xB97EF9e8739dE5B87aB47DE06eA0aA8f21708edc', // Avalanche
+        '8453': '0x833589fCD6eDbE020b86f8433fBf6189c6BdD49f', // Base
+        '59144': '0x539c39d89C6F5b7662D1C1B11c1d81E52119934B', // Linea
+        // Adicione mais USDC conforme as Chain IDs da LI.FI
     };
     
+    // Objeto que armazenará APENAS as chains Mainnet e seus dados
+    let AVAILABLE_CHAINS = {};
+
     let provider, signer, userAddress, currentQuote;
 
     // Elementos da UI
@@ -94,11 +119,12 @@
     const walletInfoEl = document.getElementById("walletInfo");
     const getQuoteBtn = document.getElementById("getQuote");
     const executeBridgeBtn = document.getElementById("executeBridge");
+    const swapChainsBtn = document.getElementById("swapChains");
     const amountEl = document.getElementById("amount");
     const fromChainEl = document.getElementById("fromChain");
     const toChainEl = document.getElementById("toChain");
 
-    // Função de Logging com cores para melhor feedback
+    // Função de Logging (com cores e timestamp)
     const log = (msg, type = 'info') => {
         let color = 'text-gray-300';
         if (type === 'success') color = 'text-green-400';
@@ -109,12 +135,71 @@
         const timestamp = new Date().toLocaleTimeString('pt-BR');
         
         outputEl.innerHTML = `<span class="${color}">[${timestamp}] ${msg}</span>\n` + outputEl.innerHTML;
-        // Limita o log para não sobrecarregar
         const lines = outputEl.textContent.split('\n').filter(line => line.trim() !== '');
         outputEl.textContent = lines.slice(0, 10).join('\n'); 
     };
 
-    // --- AÇÃO 1: CONECTAR CARTEIRA ---
+    // --- FUNÇÃO DE INICIALIZAÇÃO E CARREGAMENTO DE REDES ---
+    const loadChains = async () => {
+        log("🌎 Buscando redes Mainnet disponíveis...", 'process');
+        fromChainEl.disabled = true;
+        toChainEl.disabled = true;
+
+        try {
+            // Chamada direta à API da LI.FI (Este endpoint não precisa de proxy, pois é público)
+            const res = await fetch("https://li.quest/v1/chains");
+            const data = await res.json();
+
+            if (!res.ok || !data.chains) {
+                log(`❌ Falha ao carregar redes: ${data.message || 'Erro na API.'}`, 'error');
+                return;
+            }
+
+            // Filtra e Mapeia APENAS as Mainnets EVM
+            const mainnetEVMChains = data.chains
+                .filter(chain => chain.mainnet && chain.chainType === 'EVM')
+                .sort((a, b) => a.name.localeCompare(b.name)); // Ordena por nome
+
+            // Cria o objeto de mapeamento final para uso no script
+            AVAILABLE_CHAINS = mainnetEVMChains.reduce((acc, chain) => {
+                acc[chain.id] = {
+                    id: chain.id,
+                    name: chain.name,
+                    key: chain.key,
+                    // Tentamos usar o USDC padrão, se não tiver, o app não funcionará para essa rede.
+                    tokenAddress: COMMON_USDC_ADDRESSES[chain.id] || null, 
+                    decimals: 6, // USDC tem 6 decimais
+                };
+                return acc;
+            }, {});
+
+            // 1. Preenche os dropdowns
+            const optionsHtml = mainnetEVMChains.map(chain => 
+                // Usamos o chain.id como o 'value'
+                `<option value="${chain.id}">${chain.name} (${chain.id})</option>`
+            ).join('');
+            
+            fromChainEl.innerHTML = optionsHtml;
+            toChainEl.innerHTML = optionsHtml;
+
+            // 2. Define Polygon e Arbitrum como padrão (selecionados)
+            fromChainEl.value = '137'; // Polygon
+            toChainEl.value = '42161'; // Arbitrum
+
+            fromChainEl.disabled = false;
+            toChainEl.disabled = false;
+            
+            log(`✅ ${mainnetEVMChains.length} redes EVM Mainnet carregadas!`, 'success');
+
+        } catch (error) {
+            log(`❌ Erro crítico ao carregar redes: ${error.message}`, 'error');
+            fromChainEl.innerHTML = `<option value="" disabled selected>Erro ao carregar redes</option>`;
+            toChainEl.innerHTML = `<option value="" disabled selected>Erro ao carregar redes</option>`;
+        }
+    };
+
+    // --- AÇÃO 1: CONECTAR CARTEIRA (Mantida) ---
+    // ... [O código da função connectWallet permanece o mesmo] ...
     connectBtn.addEventListener("click", async () => {
       if (!window.ethereum) return alert("Nenhuma carteira encontrada. Por favor, instale uma extensão como a MetaMask.");
       
@@ -138,7 +223,6 @@
         connectBtn.classList.remove('bg-blue-600');
         connectBtn.classList.add('bg-green-600', 'hover:bg-green-700');
         
-        // Ativa o botão de Quote
         getQuoteBtn.disabled = false;
 
       } catch (error) {
@@ -152,13 +236,12 @@
       }
     });
 
-    // --- AÇÃO 2: OBTER COTAÇÃO ---
+    // --- AÇÃO 2: OBTER COTAÇÃO (Lógica dinâmica ajustada) ---
     getQuoteBtn.addEventListener("click", async () => {
       const amount = amountEl.value;
       if (!amount || isNaN(amount) || Number(amount) <= 0) return log("Insira um valor de USDC válido.", 'warn');
       if (!userAddress) return log("Conecte a carteira primeiro.", 'warn');
       
-      // Limpa quote anterior e desabilita execução
       currentQuote = null;
       executeBridgeBtn.disabled = true;
       executeBridgeBtn.textContent = 'Executar Bridge';
@@ -168,22 +251,31 @@
         getQuoteBtn.disabled = true;
         log("🔍 Buscando a melhor rota de bridge...", 'process');
 
-        const fromChainId = fromChainEl.value;
+        const fromChainId = fromChainEl.value; 
         const toChainId = toChainEl.value;
         
-        // Verifica se as chains e tokens estão mapeados (USDC)
-        const fromChain = CHAINS[fromChainId];
-        const toChain = CHAINS[toChainId];
+        if (fromChainId === toChainId) {
+             throw new Error("Não é possível fazer bridge para a mesma rede.");
+        }
+
+        const fromChain = AVAILABLE_CHAINS[fromChainId];
+        const toChain = AVAILABLE_CHAINS[toChainId];
+        
         if (!fromChain || !toChain) {
-             throw new Error("Chain ou token não mapeado no frontend.");
+             throw new Error("Chain ID inválido ou não carregado. Recarregue a página.");
+        }
+        
+        if (!fromChain.tokenAddress || !toChain.tokenAddress) {
+             throw new Error(`Token (USDC) não mapeado para ${fromChain.name} ou ${toChain.name}.`);
         }
 
         const fromToken = fromChain.tokenAddress;
         const toToken = toChain.tokenAddress;
-        // LI.FI espera o valor na menor unidade (wei, ou 10^6 para USDC)
+        
         const fromAmountBN = ethers.utils.parseUnits(amount, fromChain.decimals);
         const fromAmount = fromAmountBN.toString(); 
 
+        // URL para o seu Serverless Function (proxy)
         const url = `/api/quote?fromChain=${fromChainId}&toChain=${toChainId}&fromToken=${fromToken}&toToken=${toToken}&fromAddress=${userAddress}&toAddress=${userAddress}&fromAmount=${fromAmount}`;
 
         const res = await fetch(url);
@@ -198,12 +290,11 @@
         currentQuote = data;
         const est = data.estimate;
         
-        // Converte o valor de volta para um formato legível
         const toAmount = ethers.utils.formatUnits(est.toAmount, toChain.decimals);
         const time = est.executionDuration || "N/A";
 
         log(`✅ Rota encontrada!`, 'success');
-        log(`Bridge: ${est.tool}\nDe: ${amount} USDC\nPara: ${Number(toAmount).toFixed(4)} USDC\nTempo Estimado: ${time}s`);
+        log(`Bridge: ${est.tool}\nDe: ${amount} USDC (${fromChain.name})\nPara: ${Number(toAmount).toFixed(4)} USDC (${toChain.name})\nTempo Estimado: ${time}s`);
         
         executeBridgeBtn.disabled = false;
         executeBridgeBtn.textContent = `Executar via ${est.tool}`;
@@ -216,7 +307,7 @@
       }
     });
 
-    // --- AÇÃO 3: EXECUTAR BRIDGE ---
+    // --- AÇÃO 3: EXECUTAR BRIDGE (Mantida) ---
     executeBridgeBtn.addEventListener("click", async () => {
       if (!currentQuote) return log("Nenhuma cotação para executar!", 'warn');
       
@@ -227,7 +318,6 @@
       try {
         log("⚙️ Preparando transação (chamando backend)...", 'process');
         
-        // Chama o Serverless Function para obter os dados da transação
         const res = await fetch("/api/transaction", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -245,33 +335,48 @@
         
         log(`📤 Solicitando confirmação na carteira...`, 'process');
         
-        // Envia a transação para a carteira para ser assinada
         const txResponse = await signer.sendTransaction({
           to: tx.to,
           data: tx.data,
-          // Converte o 'value' (ETH/Native token) para BigNumber, se existir
           value: tx.value ? ethers.BigNumber.from(tx.value) : 0
         });
 
         log(`⏳ Transação enviada!`, 'process');
         log(`Hash: ${txResponse.hash}\nAguardando confirmação na blockchain...`);
         
-        // Aguarda a confirmação da transação
         await txResponse.wait();
         
         log(`🎉 Bridge concluída com sucesso!`, 'success');
         log(`Hash Final: ${txResponse.hash}`);
         
       } catch (error) {
-        // Erros de transação, recusa da carteira, etc.
-        const msg = error.code === 'ACTION_REJECTED' ? 'Transação rejeitada pelo usuário.' : error.message || 'Erro desconhecido durante a transação.';
+        const msg = error.code === 4001 ? 'Transação rejeitada pelo usuário.' : error.message || 'Erro desconhecido durante a transação.';
         log(`❌ Erro de Transação: ${msg}`, 'error');
       } finally {
         executeBridgeBtn.textContent = "Executar Bridge";
-        executeBridgeBtn.disabled = true; // Desabilita até buscar um novo quote
+        executeBridgeBtn.disabled = true; 
         getQuoteBtn.disabled = false;
       }
     });
+
+    // --- LÓGICA DO SWAP DE REDES ---
+    swapChainsBtn.addEventListener('click', () => {
+        const fromChain = fromChainEl.value;
+        const toChain = toChainEl.value;
+
+        // Troca os valores dos selects
+        fromChainEl.value = toChain;
+        toChainEl.value = fromChain;
+
+        // Desabilita execução e limpa quote
+        executeBridgeBtn.disabled = true;
+        executeBridgeBtn.textContent = 'Executar Bridge';
+
+        log("🔄 Redes trocadas! Busque uma nova cotação.", 'info');
+    });
+
+    // --- Inicialização ---
+    loadChains(); 
   </script>
 </body>
 </html>
