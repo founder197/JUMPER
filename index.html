@@ -7,125 +7,270 @@
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="icon" href="https://li.fi/favicon.ico" />
+  <style>
+    /* Estilo para tornar o botão 'disabled' mais claro, caso o Tailwind padrão não seja suficiente */
+    #executeBridge:disabled,
+    #getQuote:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+  </style>
 </head>
-<body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-gray-100 min-h-screen flex flex-col items-center justify-center">
+<body class="bg-slate-900 text-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
 
-  <div class="w-full max-w-md bg-slate-800/80 backdrop-blur-xl rounded-2xl shadow-2xl p-6 border border-slate-700">
-    <div class="flex items-center justify-between mb-4">
-      <h1 class="text-2xl font-bold text-blue-400">🌉 Bridge dApp</h1>
-      <button id="connectWallet" class="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 transition">Connect Wallet</button>
+  <div class="w-full max-w-md bg-slate-800/90 backdrop-blur-sm rounded-3xl shadow-2xl shadow-blue-500/10 p-8 border border-slate-700">
+    
+    <div class="flex items-center justify-between mb-6">
+      <h1 class="text-3xl font-extrabold text-blue-400 flex items-center">
+        <span class="mr-2">🌉</span> LI.FI Bridge
+      </h1>
+      <button id="connectWallet" class="px-4 py-2 text-sm font-semibold rounded-full bg-blue-600 hover:bg-blue-700 transition shadow-md shadow-blue-500/30">
+        Conectar Carteira
+      </button>
     </div>
 
-    <div id="walletInfo" class="text-sm text-gray-400 mb-4">Not connected</div>
+    <div id="walletInfo" class="text-sm text-gray-400 mb-6 border-b border-slate-700 pb-4">
+      <p class="animate-pulse">Aguardando conexão...</p>
+    </div>
 
-    <div class="space-y-3">
-      <div>
-        <label class="text-gray-300 text-sm">From Chain</label>
-        <input id="fromChain" class="w-full mt-1 p-2 rounded bg-slate-700 border border-slate-600" type="text" value="137" disabled />
+    <div class="space-y-5">
+      
+      <div class="input-group">
+        <label for="fromChain" class="text-gray-300 text-sm font-medium block mb-1">De Chain</label>
+        <select id="fromChain" class="w-full p-3 rounded-xl bg-slate-700 border border-slate-600 focus:ring-blue-500 focus:border-blue-500 appearance-none">
+            <option value="137" selected>Polygon (137)</option>
+            <option value="1">Ethereum (1)</option>
+        </select>
+        <span class="text-xs text-gray-500 mt-1 block">Tokens: USDC (0x2791Bca1...)</span>
       </div>
 
-      <div>
-        <label class="text-gray-300 text-sm">To Chain</label>
-        <input id="toChain" class="w-full mt-1 p-2 rounded bg-slate-700 border border-slate-600" type="text" value="42161" disabled />
+      <div class="input-group">
+        <label for="toChain" class="text-gray-300 text-sm font-medium block mb-1">Para Chain</label>
+        <select id="toChain" class="w-full p-3 rounded-xl bg-slate-700 border border-slate-600 focus:ring-blue-500 focus:border-blue-500 appearance-none">
+            <option value="42161" selected>Arbitrum (42161)</option>
+            <option value="10">Optimism (10)</option>
+        </select>
+        <span class="text-xs text-gray-500 mt-1 block">Tokens: USDC (0xaf88d065...)</span>
       </div>
 
-      <div>
-        <label class="text-gray-300 text-sm">Amount (USDC)</label>
-        <input id="amount" class="w-full mt-1 p-2 rounded bg-slate-700 border border-slate-600" type="number" placeholder="Ex: 10" />
+      <div class="input-group">
+        <label for="amount" class="text-gray-300 text-sm font-medium block mb-1">Valor (USDC)</label>
+        <input id="amount" class="w-full p-3 rounded-xl bg-slate-700 border border-slate-600 placeholder-gray-500 focus:ring-blue-500 focus:border-blue-500" type="number" placeholder="Ex: 10.5" step="any" />
       </div>
     </div>
 
     <div class="flex justify-between mt-6">
-      <button id="getQuote" class="flex-1 mr-2 px-4 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-600 transition">Get Quote</button>
-      <button id="executeBridge" class="flex-1 ml-2 px-4 py-2 rounded-lg bg-green-500 hover:bg-green-600 transition" disabled>Execute</button>
+      <button id="getQuote" class="flex-1 mr-2 px-4 py-3 rounded-xl font-bold bg-indigo-500 hover:bg-indigo-600 transition disabled:opacity-60 disabled:cursor-not-allowed">
+        Obter Cotação
+      </button>
+      <button id="executeBridge" class="flex-1 ml-2 px-4 py-3 rounded-xl font-bold bg-green-500 hover:bg-green-600 transition disabled:opacity-60 disabled:cursor-not-allowed" disabled>
+        Executar Bridge
+      </button>
     </div>
 
     <div class="mt-6">
-      <pre id="output" class="bg-slate-900 p-3 rounded-lg text-xs text-gray-300 whitespace-pre-wrap">Waiting for action...</pre>
+      <p class="text-sm font-medium text-gray-400 mb-2">Logs de Execução:</p>
+      <pre id="output" class="bg-slate-900/70 p-4 rounded-xl text-xs text-gray-300 whitespace-pre-wrap border border-slate-700 shadow-inner min-h-[6rem]">Aguardando ação...</pre>
     </div>
 
-    <div class="mt-4 text-center text-gray-500 text-xs">
-      Powered by <a href="https://li.fi" target="_blank" class="text-blue-400 hover:text-blue-300">LI.FI</a>
+    <div class="mt-6 text-center text-gray-500 text-xs">
+      Powered by <a href="https://li.fi" target="_blank" class="text-blue-400 hover:text-blue-300 transition">LI.FI</a>
     </div>
   </div>
 
   <script>
+    // Constantes e Mapeamento de Tokens (Simplificado para o seu caso)
+    const CHAINS = {
+        '137': { name: 'Polygon', tokenAddress: '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174', decimals: 6 }, // USDC Polygon
+        '42161': { name: 'Arbitrum', tokenAddress: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', decimals: 6 }, // USDC Arbitrum
+        // Adicionar mais chains/tokens se expandir o app
+    };
+    
     let provider, signer, userAddress, currentQuote;
 
-    const log = (msg) => document.getElementById("output").textContent = msg;
+    // Elementos da UI
+    const outputEl = document.getElementById("output");
+    const connectBtn = document.getElementById("connectWallet");
+    const walletInfoEl = document.getElementById("walletInfo");
+    const getQuoteBtn = document.getElementById("getQuote");
+    const executeBridgeBtn = document.getElementById("executeBridge");
+    const amountEl = document.getElementById("amount");
+    const fromChainEl = document.getElementById("fromChain");
+    const toChainEl = document.getElementById("toChain");
 
-    document.getElementById("connectWallet").addEventListener("click", async () => {
-      if (!window.ethereum) return alert("No wallet found. Please install MetaMask.");
-      provider = new ethers.providers.Web3Provider(window.ethereum, "any");
-      await provider.send("eth_requestAccounts", []);
-      signer = provider.getSigner();
-      userAddress = await signer.getAddress();
-      const network = await provider.getNetwork();
-      document.getElementById("walletInfo").textContent =
-        `✅ Connected: ${userAddress.slice(0,6)}... (${network.name})`;
-      document.getElementById("connectWallet").textContent = "Connected ✅";
+    // Função de Logging com cores para melhor feedback
+    const log = (msg, type = 'info') => {
+        let color = 'text-gray-300';
+        if (type === 'success') color = 'text-green-400';
+        if (type === 'error') color = 'text-red-400';
+        if (type === 'warn') color = 'text-yellow-400';
+        if (type === 'process') color = 'text-blue-400';
+        
+        const timestamp = new Date().toLocaleTimeString('pt-BR');
+        
+        outputEl.innerHTML = `<span class="${color}">[${timestamp}] ${msg}</span>\n` + outputEl.innerHTML;
+        // Limita o log para não sobrecarregar
+        const lines = outputEl.textContent.split('\n').filter(line => line.trim() !== '');
+        outputEl.textContent = lines.slice(0, 10).join('\n'); 
+    };
+
+    // --- AÇÃO 1: CONECTAR CARTEIRA ---
+    connectBtn.addEventListener("click", async () => {
+      if (!window.ethereum) return alert("Nenhuma carteira encontrada. Por favor, instale uma extensão como a MetaMask.");
+      
+      connectBtn.textContent = "Conectando...";
+      connectBtn.disabled = true;
+      walletInfoEl.innerHTML = '<p class="animate-pulse text-blue-300">Solicitando permissão...</p>';
+
+      try {
+        provider = new ethers.providers.Web3Provider(window.ethereum, "any");
+        await provider.send("eth_requestAccounts", []);
+        signer = provider.getSigner();
+        userAddress = await signer.getAddress();
+        const network = await provider.getNetwork();
+        
+        walletInfoEl.innerHTML = 
+          `<p class="text-green-400">✅ Conectado:</p>
+           <p class="text-sm mt-1">${userAddress.slice(0, 6)}...${userAddress.slice(-4)}</p>
+           <p class="text-xs text-gray-500">Rede: ${network.name} (${network.chainId})</p>`;
+        
+        connectBtn.textContent = "Conectado";
+        connectBtn.classList.remove('bg-blue-600');
+        connectBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+        
+        // Ativa o botão de Quote
+        getQuoteBtn.disabled = false;
+
+      } catch (error) {
+        log(`Erro ao conectar: ${error.message || error}`, 'error');
+        walletInfoEl.innerHTML = '<p class="text-red-400">❌ Falha na conexão</p>';
+        connectBtn.textContent = "Conectar Carteira";
+        connectBtn.classList.remove('bg-green-600');
+        connectBtn.classList.add('bg-blue-600');
+      } finally {
+        connectBtn.disabled = false;
+      }
     });
 
-    document.getElementById("getQuote").addEventListener("click", async () => {
-      const amount = document.getElementById("amount").value;
-      if (!amount) return alert("Enter amount");
-      if (!userAddress) return alert("Connect wallet first");
+    // --- AÇÃO 2: OBTER COTAÇÃO ---
+    getQuoteBtn.addEventListener("click", async () => {
+      const amount = amountEl.value;
+      if (!amount || isNaN(amount) || Number(amount) <= 0) return log("Insira um valor de USDC válido.", 'warn');
+      if (!userAddress) return log("Conecte a carteira primeiro.", 'warn');
+      
+      // Limpa quote anterior e desabilita execução
+      currentQuote = null;
+      executeBridgeBtn.disabled = true;
+      executeBridgeBtn.textContent = 'Executar Bridge';
 
-      const fromChain = 137; // Polygon
-      const toChain = 42161; // Arbitrum
-      const fromToken = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"; // USDC Polygon
-      const toToken = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831"; // USDC Arbitrum
-      const fromAmount = (Number(amount) * 1e6).toString(); // 6 decimais
+      try {
+        getQuoteBtn.textContent = "Buscando...";
+        getQuoteBtn.disabled = true;
+        log("🔍 Buscando a melhor rota de bridge...", 'process');
 
-      const url = `/api/quote?fromChain=${fromChain}&toChain=${toChain}&fromToken=${fromToken}&toToken=${toToken}&fromAddress=${userAddress}&toAddress=${userAddress}&fromAmount=${fromAmount}`;
+        const fromChainId = fromChainEl.value;
+        const toChainId = toChainEl.value;
+        
+        // Verifica se as chains e tokens estão mapeados (USDC)
+        const fromChain = CHAINS[fromChainId];
+        const toChain = CHAINS[toChainId];
+        if (!fromChain || !toChain) {
+             throw new Error("Chain ou token não mapeado no frontend.");
+        }
 
-      log("🔍 Fetching best route...");
-      const res = await fetch(url);
-      const data = await res.json();
+        const fromToken = fromChain.tokenAddress;
+        const toToken = toChain.tokenAddress;
+        // LI.FI espera o valor na menor unidade (wei, ou 10^6 para USDC)
+        const fromAmountBN = ethers.utils.parseUnits(amount, fromChain.decimals);
+        const fromAmount = fromAmountBN.toString(); 
 
-      if (!data?.estimate) {
-        log("❌ No valid route found.");
-        document.getElementById("executeBridge").disabled = true;
-        return;
+        const url = `/api/quote?fromChain=${fromChainId}&toChain=${toChainId}&fromToken=${fromToken}&toToken=${toToken}&fromAddress=${userAddress}&toAddress=${userAddress}&fromAmount=${fromAmount}`;
+
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!res.ok || !data?.estimate) {
+            log(`❌ Nenhuma rota válida encontrada ou erro na API.`, 'error');
+            log(`Detalhes do Erro: ${data.message || 'Sem dados de erro.'}`, 'error');
+            return;
+        }
+
+        currentQuote = data;
+        const est = data.estimate;
+        
+        // Converte o valor de volta para um formato legível
+        const toAmount = ethers.utils.formatUnits(est.toAmount, toChain.decimals);
+        const time = est.executionDuration || "N/A";
+
+        log(`✅ Rota encontrada!`, 'success');
+        log(`Bridge: ${est.tool}\nDe: ${amount} USDC\nPara: ${Number(toAmount).toFixed(4)} USDC\nTempo Estimado: ${time}s`);
+        
+        executeBridgeBtn.disabled = false;
+        executeBridgeBtn.textContent = `Executar via ${est.tool}`;
+
+      } catch (error) {
+        log(`❌ Erro ao buscar cotação: ${error.message}`, 'error');
+      } finally {
+        getQuoteBtn.textContent = "Obter Cotação";
+        getQuoteBtn.disabled = false;
       }
-
-      currentQuote = data;
-      const est = data.estimate;
-      const toAmount = (est.toAmount / 1e6).toFixed(6);
-      const time = est.executionDuration || "N/A";
-
-      log(`✅ Route found!\nBridge: ${est.tool}\nFrom: ${amount} USDC\nTo: ${toAmount} USDC\nEstimated time: ${time}s`);
-      const execBtn = document.getElementById("executeBridge");
-      execBtn.disabled = false;
-      execBtn.textContent = `Execute via ${est.tool}`;
     });
 
-    document.getElementById("executeBridge").addEventListener("click", async () => {
-      if (!currentQuote) return alert("No quote found!");
-      log("⚙️ Preparing transaction...");
-      const res = await fetch("/api/transaction", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(currentQuote)
-      });
-      const txData = await res.json();
-      console.log("TX Debug:", txData);
+    // --- AÇÃO 3: EXECUTAR BRIDGE ---
+    executeBridgeBtn.addEventListener("click", async () => {
+      if (!currentQuote) return log("Nenhuma cotação para executar!", 'warn');
+      
+      executeBridgeBtn.textContent = "Preparando...";
+      executeBridgeBtn.disabled = true;
+      getQuoteBtn.disabled = true;
 
-      if (!txData.transactionRequest) {
-        log("❌ No transaction data returned. Check console for details.");
-        return;
+      try {
+        log("⚙️ Preparando transação (chamando backend)...", 'process');
+        
+        // Chama o Serverless Function para obter os dados da transação
+        const res = await fetch("/api/transaction", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(currentQuote)
+        });
+        const txData = await res.json();
+        
+        if (!res.ok || !txData.transactionRequest) {
+          log("❌ Falha ao obter dados da transação do backend.", 'error');
+          log(`Detalhes do Erro: ${txData.message || 'Verifique os logs do Vercel.'}`, 'error');
+          throw new Error("Invalid transaction data from API.");
+        }
+
+        const tx = txData.transactionRequest;
+        
+        log(`📤 Solicitando confirmação na carteira...`, 'process');
+        
+        // Envia a transação para a carteira para ser assinada
+        const txResponse = await signer.sendTransaction({
+          to: tx.to,
+          data: tx.data,
+          // Converte o 'value' (ETH/Native token) para BigNumber, se existir
+          value: tx.value ? ethers.BigNumber.from(tx.value) : 0
+        });
+
+        log(`⏳ Transação enviada!`, 'process');
+        log(`Hash: ${txResponse.hash}\nAguardando confirmação na blockchain...`);
+        
+        // Aguarda a confirmação da transação
+        await txResponse.wait();
+        
+        log(`🎉 Bridge concluída com sucesso!`, 'success');
+        log(`Hash Final: ${txResponse.hash}`);
+        
+      } catch (error) {
+        // Erros de transação, recusa da carteira, etc.
+        const msg = error.code === 'ACTION_REJECTED' ? 'Transação rejeitada pelo usuário.' : error.message || 'Erro desconhecido durante a transação.';
+        log(`❌ Erro de Transação: ${msg}`, 'error');
+      } finally {
+        executeBridgeBtn.textContent = "Executar Bridge";
+        executeBridgeBtn.disabled = true; // Desabilita até buscar um novo quote
+        getQuoteBtn.disabled = false;
       }
-
-      const tx = txData.transactionRequest;
-      const txResponse = await signer.sendTransaction({
-        to: tx.to,
-        data: tx.data,
-        value: tx.value ? ethers.BigNumber.from(tx.value) : 0
-      });
-
-      log(`📤 Transaction sent!\nHash: ${txResponse.hash}\n⏳ Waiting for confirmation...`);
-      await txResponse.wait();
-      log(`✅ Bridge completed!\nHash: ${txResponse.hash}`);
     });
   </script>
 </body>
