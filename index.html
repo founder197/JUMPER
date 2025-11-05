@@ -8,13 +8,11 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="icon" href="https://li.fi/favicon.ico" />
   <style>
-    /* Estilo para tornar o botão 'disabled' mais claro, caso o Tailwind padrão não seja suficiente */
     #executeBridge:disabled,
     #getQuote:disabled {
       cursor: not-allowed;
       opacity: 0.6;
     }
-    /* Estilo para setas em select */
     .select-arrow {
       background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='white'%3e%3cpath fill-rule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z' clip-rule='evenodd'/%3e%3c/svg%3e");
       background-repeat: no-repeat;
@@ -47,7 +45,10 @@
         <select id="fromChain" class="w-full p-3 rounded-xl bg-slate-700 border border-slate-600 focus:ring-blue-500 focus:border-blue-500 appearance-none select-arrow">
             <option value="" disabled selected>Carregando redes...</option>
         </select>
-        <span id="fromChainToken" class="text-xs text-gray-500 mt-1 block">Token: USDT (6 decimais)</span>
+        <div class="flex justify-between items-center mt-1">
+          <span id="fromChainToken" class="text-xs text-gray-500">Token: USDT</span>
+          <span id="fromChainBalance" class="text-xs text-blue-300 font-medium">Saldo: --</span>
+        </div>
       </div>
 
       <div class="flex justify-center">
@@ -63,7 +64,7 @@
         <select id="toChain" class="w-full p-3 rounded-xl bg-slate-700 border border-slate-600 focus:ring-blue-500 focus:border-blue-500 appearance-none select-arrow">
             <option value="" disabled selected>Carregando redes...</option>
         </select>
-        <span id="toChainToken" class="text-xs text-gray-500 mt-1 block">Token: USDT (6 decimais)</span>
+        <span id="toChainToken" class="text-xs text-gray-500 mt-1 block">Token: USDT</span>
       </div>
 
       <div class="input-group">
@@ -92,26 +93,26 @@
   </div>
 
   <script>
-    // --- Mapeamento de Tokens Padrão (Agora focado no USDT) ---
-    // Decimais do USDT: Geralmente 6 em L2s e 6 ou 18 (se for um wrapper) em outras. 
-    // Usaremos 6 para simplicidade, que é o padrão da maioria dos stablecoins.
+    // --- Mapeamento de Tokens Padrão (Foco no USDT) ---
+    // Corrigido: Removido o endereço problemático da Base (8453)
     const COMMON_USDT_ADDRESSES = {
         '1': '0xdAC17F958D2ee523a2206206994597C13D831ec7', // Ethereum (1) - 6 Decimais
         '10': '0x94b008aA29c5124dD070aE447a029fcd6436bB71', // Optimism (10) - 6 Decimais
-        '56': '0x55d398326f99059fF775485246999027B3197955', // BNB Chain (56) - 18 Decimais (USDT BEP-20 é 18)
+        '56': '0x55d398326f99059fF775485246999027B3197955', // BNB Chain (56) - 18 Decimais
         '137': '0xc2132D05D31c914a87C6611C10748AEb04B58e8F', // Polygon (137) - 6 Decimais
         '250': '0x049d68029688EAbF473097a2fE32A8c4479fEdf3', // Fantom (250) - 6 Decimais
         '42161': '0xFd086bc7A59EFe830F1f0c2fA166c17E7d0dC051', // Arbitrum (42161) - 6 Decimais
         '43114': '0x9702230A8Ea53601f5cd2dc00fDBc13d632aC4CD', // Avalanche (43114) - 6 Decimais
-        '8453': '0x49d5c192d2C5E7A2337d1a108A7453d718C9996F', // Base (8453) - 6 Decimais
+        // '8453': '...', // Base (8453) - Endereço estava com erro, removido temporariamente
         '59144': '0xFd086bc7A59EFe830F1f0c2fA166c17E7d0dC051', // Linea (59144) - 6 Decimais
-        // Para todas as outras redes, o tokenAddress será null, resultando em um erro claro.
     };
     
-    // Objeto que armazenará APENAS as chains Mainnet e seus dados
+    // Objeto que armazenará as chains Mainnet e seus dados
     let AVAILABLE_CHAINS = {};
 
     let provider, signer, userAddress, currentQuote;
+    // ABI Mínimo do ERC20 para buscar saldo
+    const ERC20_ABI = ["function balanceOf(address) view returns (uint256)"];
 
     // Elementos da UI
     const outputEl = document.getElementById("output");
@@ -123,6 +124,8 @@
     const amountEl = document.getElementById("amount");
     const fromChainEl = document.getElementById("fromChain");
     const toChainEl = document.getElementById("toChain");
+    const fromBalanceEl = document.getElementById("fromChainBalance");
+    const fromTokenInfoEl = document.getElementById("fromChainToken");
 
     // Função de Logging (com cores e timestamp)
     const log = (msg, type = 'info') => {
@@ -138,6 +141,49 @@
         const lines = outputEl.textContent.split('\n').filter(line => line.trim() !== '');
         outputEl.textContent = lines.slice(0, 10).join('\n'); 
     };
+    
+    // --- **NOVO: FUNÇÃO PARA BUSCAR SALDO** ---
+    const fetchBalance = async (selectedChainId) => {
+        if (!provider || !userAddress || !selectedChainId || !AVAILABLE_CHAINS[selectedChainId]) {
+            fromBalanceEl.textContent = "Saldo: --";
+            return;
+        }
+        
+        const chain = AVAILABLE_CHAINS[selectedChainId];
+        const tokenAddress = chain.tokenAddress;
+        const decimals = chain.decimals;
+
+        if (!tokenAddress) {
+            fromBalanceEl.textContent = "Saldo: N/A"; // Token não mapeado
+            return;
+        }
+
+        try {
+            const network = await provider.getNetwork();
+            const connectedChainId = network.chainId.toString();
+
+            // Só busca o saldo se a carteira estiver na rede selecionada
+            if (connectedChainId !== selectedChainId) {
+                fromBalanceEl.textContent = "Saldo: Mude a rede para ver";
+                return;
+            }
+
+            fromBalanceEl.textContent = "Saldo: Carregando...";
+            
+            const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
+            const balanceBN = await contract.balanceOf(userAddress);
+            
+            const formattedBalance = ethers.utils.formatUnits(balanceBN, decimals);
+            
+            // Arredonda para 4 casas decimais para exibição
+            fromBalanceEl.textContent = `Saldo: ${parseFloat(formattedBalance).toFixed(4)}`;
+
+        } catch (error) {
+            console.error("Fetch Balance Error:", error);
+            fromBalanceEl.textContent = "Saldo: Erro";
+        }
+    };
+
 
     // --- FUNÇÃO DE INICIALIZAÇÃO E CARREGAMENTO DE REDES ---
     const loadChains = async () => {
@@ -165,7 +211,6 @@
                     id: chain.id,
                     name: chain.name,
                     key: chain.key,
-                    // Usa o endereço do USDT mapeado
                     tokenAddress: COMMON_USDT_ADDRESSES[chain.id] || null, 
                     decimals: tokenDecimals, 
                 };
@@ -174,7 +219,7 @@
 
             // Preenche os dropdowns
             const optionsHtml = mainnetEVMChains.map(chain => {
-                const isSupported = COMMON_USDT_ADDRESSES[chain.id];
+                const isSupported = AVAILABLE_CHAINS[chain.id].tokenAddress; // Verifica se o token está mapeado
                 const displayName = isSupported ? chain.name : `${chain.name} (USDT não mapeado)`;
                 return `<option value="${chain.id}" ${isSupported ? '' : 'disabled'}>${displayName} (${chain.id})</option>`;
             }).join('');
@@ -182,13 +227,16 @@
             fromChainEl.innerHTML = optionsHtml;
             toChainEl.innerHTML = optionsHtml;
 
-            // Define Arbitrum como padrão de origem e Ethereum como destino
-            fromChainEl.value = '42161'; // Arbitrum
-            toChainEl.value = '137'; // Polygon (ou '1' para Ethereum se preferir)
+            // Define Arbitrum como padrão de origem e Polygon como destino
+            fromChainEl.value = '42161'; // Arbitrum (Onde você disse que tem USDT)
+            toChainEl.value = '137'; // Polygon 
 
             fromChainEl.disabled = false;
             toChainEl.disabled = false;
             swapChainsBtn.disabled = false;
+            
+            // Atualiza info de decimais do token padrão (Arbitrum)
+            fromTokenInfoEl.textContent = `Token: USDT (${AVAILABLE_CHAINS['42161'].decimals} decimais)`;
             
             log(`✅ ${mainnetEVMChains.length} redes EVM Mainnet carregadas! (Foco em USDT)`, 'success');
 
@@ -199,7 +247,7 @@
         }
     };
 
-    // --- AÇÃO 1: CONECTAR CARTEIRA (Mantida) ---
+    // --- AÇÃO 1: CONECTAR CARTEIRA (Gatilho de Saldo Adicionado) ---
     connectBtn.addEventListener("click", async () => {
       if (!window.ethereum) return log("Nenhuma carteira encontrada. Por favor, instale uma extensão como a MetaMask.", 'error');
       
@@ -224,6 +272,9 @@
         connectBtn.classList.add('bg-green-600', 'hover:bg-green-700');
         
         getQuoteBtn.disabled = false;
+        
+        // **NOVO: Buscar saldo após conectar**
+        fetchBalance(fromChainEl.value); 
 
       } catch (error) {
         log(`Erro ao conectar: ${error.code === 4001 ? 'Usuário rejeitou a conexão.' : error.message || error}`, 'error');
@@ -235,9 +286,49 @@
         connectBtn.disabled = false;
       }
     });
+    
+    // --- NOVO: Listener de mudança na "From Chain" ---
+    fromChainEl.addEventListener('change', (e) => {
+        const chainId = e.target.value;
+        const chain = AVAILABLE_CHAINS[chainId];
+        
+        if (chain) {
+            // Atualiza o texto de decimais
+            fromTokenInfoEl.textContent = `Token: USDT (${chain.decimals} decimais)`;
+            // Tenta buscar o saldo da nova rede selecionada
+            fetchBalance(chainId);
+        }
+    });
+
+    // --- NOVO: Listeners de eventos da Carteira (MetaMask) ---
+    if (window.ethereum) {
+        // Quando o usuário troca de rede na MetaMask
+        window.ethereum.on('chainChanged', (_chainId) => {
+            log('Rede da carteira alterada.', 'info');
+            // Recria o provider para a nova rede
+            provider = new ethers.providers.Web3Provider(window.ethereum, "any");
+            // Verifica o saldo da rede "From" selecionada (pode agora corresponder)
+            fetchBalance(fromChainEl.value);
+        });
+        
+        // Quando o usuário troca de conta na MetaMask
+        window.ethereum.on('accountsChanged', (accounts) => {
+            if (accounts.length === 0) {
+                log('Carteira desconectada.', 'warn');
+                // Simplesmente recarrega a página para resetar o estado
+                window.location.reload();
+            } else {
+                log('Conta da carteira alterada.', 'info');
+                // Recarrega para forçar a reconexão e atualização de saldos
+                window.location.reload();
+            }
+        });
+    }
+
 
     // --- AÇÃO 2: OBTER COTAÇÃO (Lógica USDT ajustada) ---
     getQuoteBtn.addEventListener("click", async () => {
+      // ... (Restante do código de getQuote) ...
       const amount = amountEl.value;
       if (!amount || isNaN(amount) || Number(amount) <= 0) return log("Insira um valor de USDT válido.", 'warn');
       if (!userAddress) return log("Conecte a carteira primeiro.", 'warn');
@@ -272,11 +363,9 @@
         const fromToken = fromChain.tokenAddress;
         const toToken = toChain.tokenAddress;
         
-        // Usa as decimais corretas para o token USDT da rede de origem
         const fromAmountBN = ethers.utils.parseUnits(amount, fromChain.decimals);
         const fromAmount = fromAmountBN.toString(); 
 
-        // URL para o seu Serverless Function (proxy)
         const url = `/api/quote?fromChain=${fromChainId}&toChain=${toChainId}&fromToken=${fromToken}&toToken=${toToken}&fromAddress=${userAddress}&toAddress=${userAddress}&fromAmount=${fromAmount}`;
 
         const res = await fetch(url);
@@ -291,7 +380,6 @@
         currentQuote = data;
         const est = data.estimate;
         
-        // Usa as decimais corretas para o token USDT da rede de destino
         const toAmount = ethers.utils.formatUnits(est.toAmount, toChain.decimals);
         const time = est.executionDuration || "N/A";
 
@@ -309,8 +397,9 @@
       }
     });
 
-    // --- AÇÃO 3: EXECUTAR BRIDGE (Mantida) ---
+    // --- AÇÃO 3: EXECUTAR BRIDGE (Com verificação de rede) ---
     executeBridgeBtn.addEventListener("click", async () => {
+      // ... (Restante do código de executeBridge) ...
       if (!currentQuote) return log("Nenhuma cotação para executar!", 'warn');
       
       executeBridgeBtn.textContent = "Preparando...";
@@ -335,19 +424,17 @@
 
         const tx = txData.transactionRequest;
         
-        // Verifica se a carteira está na rede correta antes de enviar a transação
+        // Verifica se a carteira está na rede correta antes de enviar
         const currentNetwork = await provider.getNetwork();
         const requiredChainId = parseInt(fromChainEl.value);
 
         if (currentNetwork.chainId !== requiredChainId) {
             log(`⚠️ Por favor, mude sua carteira para a rede de origem: ${AVAILABLE_CHAINS[requiredChainId].name} (${requiredChainId})`, 'warn');
-            // Tenta forçar a troca de rede na carteira
             try {
                 await window.ethereum.request({
                     method: 'wallet_switchEthereumChain',
                     params: [{ chainId: `0x${requiredChainId.toString(16)}` }],
                 });
-                // Pausa para o usuário confirmar a troca
                 log("Aguardando troca de rede na carteira...", 'process');
                 // Retorna para que o usuário clique novamente após a troca
                 executeBridgeBtn.disabled = false;
@@ -355,7 +442,6 @@
                 getQuoteBtn.disabled = false;
                 return; 
             } catch (switchError) {
-                // Erro do usuário ou da carteira ao tentar trocar
                 log("❌ Não foi possível trocar a rede automaticamente. Por favor, faça manualmente.", 'error');
                 throw new Error("Troca de rede necessária.");
             }
@@ -377,6 +463,9 @@
         log(`🎉 Bridge concluída com sucesso!`, 'success');
         log(`Hash Final: ${txResponse.hash}`);
         
+        // **NOVO: Atualizar saldo após a transação**
+        fetchBalance(fromChainEl.value); 
+        
       } catch (error) {
         const msg = error.code === 4001 ? 'Transação rejeitada pelo usuário.' : error.message || 'Erro desconhecido durante a transação.';
         log(`❌ Erro de Transação: ${msg}`, 'error');
@@ -389,6 +478,7 @@
 
     // --- LÓGICA DO SWAP DE REDES ---
     swapChainsBtn.addEventListener('click', () => {
+        // ... (Restante do código de swapChains) ...
         const fromChain = fromChainEl.value;
         const toChain = toChainEl.value;
 
@@ -397,6 +487,13 @@
 
         executeBridgeBtn.disabled = true;
         executeBridgeBtn.textContent = 'Executar Bridge';
+
+        // **NOVO: Atualizar UI de saldo e decimais ao trocar**
+        const newFromChain = AVAILABLE_CHAINS[toChain];
+        if (newFromChain) {
+            fromTokenInfoEl.textContent = `Token: USDT (${newFromChain.decimals} decimais)`;
+            fetchBalance(newFromChain.id);
+        }
 
         log("🔄 Redes trocadas! Busque uma nova cotação.", 'info');
     });
