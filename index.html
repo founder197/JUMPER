@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bridge dApp – Powered by LI.FI</title>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" href="https://li.fi/favicon.ico" />
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-gray-100 min-h-screen flex flex-col items-center justify-center">
+
+  <div class="w-full max-w-md bg-slate-800/80 backdrop-blur-xl rounded-2xl shadow-2xl p-6 border border-slate-700">
+    <div class="flex items-center justify-between mb-4">
+      <h1 class="text-2xl font-bold text-blue-400">🌉 Bridge dApp</h1>
+      <button id="connectWallet" class="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 transition">Connect Wallet</button>
+    </div>
+
+    <div id="walletInfo" class="text-sm text-gray-400 mb-4">Not connected</div>
+
+    <div class="space-y-3">
+      <div>
+        <label class="text-gray-300 text-sm">From Chain</label>
+        <input id="fromChain" class="w-full mt-1 p-2 rounded bg-slate-700 border border-slate-600" type="text" value="137" disabled />
+      </div>
+
+      <div>
+        <label class="text-gray-300 text-sm">To Chain</label>
+        <input id="toChain" class="w-full mt-1 p-2 rounded bg-slate-700 border border-slate-600" type="text" value="42161" disabled />
+      </div>
+
+      <div>
+        <label class="text-gray-300 text-sm">Amount (USDC)</label>
+        <input id="amount" class="w-full mt-1 p-2 rounded bg-slate-700 border border-slate-600" type="number" placeholder="Ex: 10" />
+      </div>
+    </div>
+
+    <div class="flex justify-between mt-6">
+      <button id="getQuote" class="flex-1 mr-2 px-4 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-600 transition">Get Quote</button>
+      <button id="executeBridge" class="flex-1 ml-2 px-4 py-2 rounded-lg bg-green-500 hover:bg-green-600 transition" disabled>Execute</button>
+    </div>
+
+    <div class="mt-6">
+      <pre id="output" class="bg-slate-900 p-3 rounded-lg text-xs text-gray-300 whitespace-pre-wrap">Waiting for action...</pre>
+    </div>
+
+    <div class="mt-4 text-center text-gray-500 text-xs">
+      Powered by <a href="https://li.fi" target="_blank" class="text-blue-400 hover:text-blue-300">LI.FI</a>
+    </div>
+  </div>
+
+  <script>
+    let provider, signer, userAddress, currentQuote;
+
+    const log = (msg) => document.getElementById("output").textContent = msg;
+
+    document.getElementById("connectWallet").addEventListener("click", async () => {
+      if (!window.ethereum) return alert("No wallet found. Please install MetaMask.");
+      provider = new ethers.providers.Web3Provider(window.ethereum, "any");
+      await provider.send("eth_requestAccounts", []);
+      signer = provider.getSigner();
+      userAddress = await signer.getAddress();
+      const network = await provider.getNetwork();
+      document.getElementById("walletInfo").textContent =
+        `✅ Connected: ${userAddress.slice(0,6)}... (${network.name})`;
+      document.getElementById("connectWallet").textContent = "Connected ✅";
+    });
+
+    document.getElementById("getQuote").addEventListener("click", async () => {
+      const amount = document.getElementById("amount").value;
+      if (!amount) return alert("Enter amount");
+      if (!userAddress) return alert("Connect wallet first");
+
+      const fromChain = 137; // Polygon
+      const toChain = 42161; // Arbitrum
+      const fromToken = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"; // USDC Polygon
+      const toToken = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831"; // USDC Arbitrum
+      const fromAmount = (Number(amount) * 1e6).toString(); // 6 decimais
+
+      const url = `/api/quote?fromChain=${fromChain}&toChain=${toChain}&fromToken=${fromToken}&toToken=${toToken}&fromAddress=${userAddress}&toAddress=${userAddress}&fromAmount=${fromAmount}`;
+
+      log("🔍 Fetching best route...");
+      const res = await fetch(url);
+      const data = await res.json();
+
+      if (!data?.estimate) {
+        log("❌ No valid route found.");
+        document.getElementById("executeBridge").disabled = true;
+        return;
+      }
+
+      currentQuote = data;
+      const est = data.estimate;
+      const toAmount = (est.toAmount / 1e6).toFixed(6);
+      const time = est.executionDuration || "N/A";
+
+      log(`✅ Route found!\nBridge: ${est.tool}\nFrom: ${amount} USDC\nTo: ${toAmount} USDC\nEstimated time: ${time}s`);
+      const execBtn = document.getElementById("executeBridge");
+      execBtn.disabled = false;
+      execBtn.textContent = `Execute via ${est.tool}`;
+    });
+
+    document.getElementById("executeBridge").addEventListener("click", async () => {
+      if (!currentQuote) return alert("No quote found!");
+      log("⚙️ Preparing transaction...");
+      const res = await fetch("/api/transaction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(currentQuote)
+      });
+      const txData = await res.json();
+      console.log("TX Debug:", txData);
+
+      if (!txData.transactionRequest) {
+        log("❌ No transaction data returned. Check console for details.");
+        return;
+      }
+
+      const tx = txData.transactionRequest;
+      const txResponse = await signer.sendTransaction({
+        to: tx.to,
+        data: tx.data,
+        value: tx.value ? ethers.BigNumber.from(tx.value) : 0
+      });
+
+      log(`📤 Transaction sent!\nHash: ${txResponse.hash}\n⏳ Waiting for confirmation...`);
+      await txResponse.wait();
+      log(`✅ Bridge completed!\nHash: ${txResponse.hash}`);
+    });
+  </script>
+</body>
+</html>
